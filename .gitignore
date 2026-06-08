@@ -1,0 +1,8 @@
+*
+!.gitignore
+!.gitattributes
+!README.md
+!01_dbscan_nvcc_drop_core_points.ipynb
+!02_dbscan_nvcc_quantizacao_uint8_uint4.ipynb
+!03_dbscan_nvcc_datasets_reais_heterogeneos.ipynb
+!04_dbscan_nvcc_multi_eps.ipynb
