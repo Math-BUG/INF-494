@@ -59,9 +59,18 @@ Os arquivos `data/*.bin` e `data/*.npy` sao gerados no Colab e nao sao commitado
 
 1. Abra `00_datasets_e_configuracao.ipynb` no Google Colab.
 2. Ative GPU em `Ambiente de execucao > Alterar tipo de ambiente de execucao > GPU`.
-3. Rode o notebook 00 para gerar `data/manifest.csv`.
+3. Rode o notebook 00 para montar o Google Drive e gerar `data/manifest.csv` em `/content/drive/MyDrive/INF494_DBSCAN`.
 4. Rode os notebooks 01, 02 e 04 individualmente, ou rode `03_benchmark_comparativo.ipynb` para a comparacao consolidada.
 5. Confira os CSVs gerados em `results/`.
+
+Por padrao, os notebooks usam:
+
+```python
+USE_GOOGLE_DRIVE = True
+DRIVE_PROJECT_DIR = Path("/content/drive/MyDrive/INF494_DBSCAN")
+```
+
+Assim, `data/` e `results/` ficam persistentes entre notebooks e entre sessoes do Colab. Se nao estiver no Colab, o codigo usa o diretorio local do notebook.
 
 Todos os notebooks incluem diagnostico:
 
