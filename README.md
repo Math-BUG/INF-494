@@ -104,9 +104,31 @@ Resultados finais devem vir do protocolo comum. Se ainda nao houver execucao com
 
 Um CSV antigo de drop de core points sem metadados de dataset pode existir fora do repositorio local, mas ele nao substitui o benchmark comum porque nao registra `dataset_name`, `n_samples` e `n_features`.
 
+
+## Otimizacoes adicionais incorporadas aos notebooks
+
+- Notebook 01: mantem drop por hash e adiciona representantes espaciais por `cell` para datasets 2D, com versoes `cuda_cpp_grid_reps_K1`, `cuda_cpp_grid_reps_K2` e `cuda_cpp_grid_reps_K4`.
+- Notebook 02: compara `float32`, `uint8` e `uint4 packed` com warm-up, `N_REPEATS = 3` e mediana. `cuda_cpp_uint8_dp4a` fica registrado como experimento futuro, sem inventar resultado.
+- Notebook 03: benchmark final justo com warm-up, repeats, medianas, falhas registradas e comparacao contra `cuML`/`sklearn` e `cuda_cpp_float32`.
+- Notebook 04: multi-EPS com warm-up, repeats e mediana dos tempos.
+
+## Comparacao justa de tempo
+
+Para comparar contra `cuML`, use `time_s_wall`, pois ele mede a chamada completa observada pelo usuario. Para comparar versoes CUDA entre si, use tambem `total_cuda_event_s`, pois ele mede o trecho do kernel/binario com `cudaEvent`.
+
+Nao tire conclusao com base em uma unica primeira execucao. Os notebooks fazem warm-up e usam mediana de multiplas execucoes para reduzir ruido.
+
+## Interpretacao esperada
+
+`cuML` e um baseline altamente otimizado. O objetivo do trabalho nao e garantir vitoria geral contra `cuML`, mas encontrar cenarios especificos em que aproximacoes/especializacoes se aproximam ou superam o baseline com qualidade aceitavel.
+
+Em geral, `uint8` tende a ser o melhor equilibrio entre desempenho e qualidade. `uint4 packed` e mais agressivo e pode degradar `ARI`/`NMI`. Representantes por `cell` podem preservar melhor a estrutura espacial do cluster do que drop por hash, mas a versao inicial e restrita a 2D.
+
 ## Limitacoes conhecidas
 
 - As versoes CUDA sao experimentais e `O(n^2)`.
+- O grid espacial inicial e restrito a 2D.
+- Usar PCA2D em datasets reais mudaria o espaco original e deve ser interpretado apenas como teste da estrategia de grid.
 - Nao ha indice espacial.
 - `50000` pontos pode falhar dependendo da GPU do Colab e da dimensao.
 - Datasets reais sao amostrados para manter custo viavel.
