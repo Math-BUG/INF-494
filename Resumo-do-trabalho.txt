@@ -1,0 +1,5 @@
+* DBSCAN 
+* Cuml, Gemini-pro (Colab)
+* Aproximado - Drop nos "cores point"
+* Pacotes 8 e 4 bits. 
+* Gerar datasets: variação de densidade e variação heterogenea (versão multi EPS)
