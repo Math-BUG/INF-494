@@ -1,68 +1,105 @@
 # INF-494 - DBSCAN em GPU com CUDA/NVCC
 
-Este repositorio contem os quatro notebooks finais do trabalho de GPU sobre adaptacoes experimentais do `DBSCAN` para execucao em GPU. O foco e estudar gargalos do algoritmo em datasets densos e heterogeneos, comparar com `cuML` e testar aproximacoes que reduzem custo de memoria ou custo de conexao entre core points.
+Repositorio do trabalho de GPU sobre adaptacoes experimentais do `DBSCAN`. A entrega usa Google Colab, `CUDA C++`, `%%writefile`, compilacao com `nvcc -O3`, execucao do binario e baseline com `cuML` quando disponivel. Se `cuML` nao estiver disponivel, os notebooks usam `sklearn` como alternativa.
 
-Os notebooks seguem o estilo usado na disciplina: Google Colab, RAPIDS/`cuML` como baseline quando disponivel, alternativa com `sklearn`, codigo `CUDA C++` escrito com `%%writefile`, compilacao com `nvcc -O3` e execucao do binario. Quando `nvprof` estiver disponivel, ele e usado para perfilamento; quando nao estiver, o binario e executado diretamente, pois o proprio codigo CUDA mede tempo com `cudaEvent`.
+As implementacoes sao didaticas e ainda usam comparacao par-a-par, portanto continuam `O(n^2)`. Por isso os datasets grandes sao tratados por amostragem controlada, e falhas por tempo ou memoria devem ser registradas de forma honesta.
 
-## Relacao com o pedido do professor
+## Protocolo experimental comum
 
-Pelas fontes locais do trabalho, a orientacao principal foi explorar por que o `DBSCAN` fica caro em datasets densos: muitos pontos viram core points e a etapa de aglomeracao/conexao entre esses pontos passa a comparar muitas vizinhancas sobrepostas. O trabalho tambem pede comparacao com `cuML`, uso da versao de referencia citada em aula como inspiracao metodologica, drop de core points, quantizacao em 8 e 4 bits, datasets com densidade variavel e uma ideia multi-EPS.
+O repositorio agora usa um protocolo comum para evitar comparacoes injustas entre notebooks. O notebook `00_datasets_e_configuracao.ipynb` gera `data/manifest.csv`, e os notebooks de estrategia carregam os mesmos datasets, tamanhos, normalizacao, `eps`, `min_samples`, seed e metricas.
 
-O Colab citado na aula nao e copiado aqui. Os notebooks deste repositorio sao autocontidos e implementam as versoes finais diretamente.
+O protocolo padroniza:
 
-## Notebooks publicados
+- normalizacao `float32` por min-max;
+- `estimate_eps(X, min_samples=8, quantile=0.90, sample_size=5000)`;
+- `MIN_SAMPLES = 8`;
+- `SEED = 42`;
+- datasets sinteticos e reais amostrados;
+- tamanhos `quick` e `benchmark`;
+- metricas `ARI`, `NMI`, porcentagem de ruido, numero de clusters e tempos.
 
-| Notebook | Papel no trabalho |
-| --- | --- |
-| `01_dbscan_nvcc_drop_core_points.ipynb` | Testa `DBSCAN` em `CUDA C++` com reducao deterministica de core points: 100%, 75%, 50% e 25%. |
-| `02_dbscan_nvcc_quantizacao_uint8_uint4.ipynb` | Compara `cuda_cpp_float32`, `cuda_cpp_uint8` e `cuda_cpp_uint4_packed` no mesmo fluxo experimental. |
-| `03_dbscan_nvcc_datasets_reais_heterogeneos.ipynb` | Organiza benchmarks com datasets sinteticos controlados e datasets reais complementares do `sklearn`. |
-| `04_dbscan_nvcc_multi_eps.ipynb` | Implementa uma versao experimental multi-EPS, calculando tres valores de `eps` na mesma execucao CUDA. |
+## Modos de execucao
 
-## Como executar no Colab
-
-1. Abra o notebook desejado no Google Colab.
-2. Ative GPU em `Ambiente de execucao > Alterar tipo de ambiente de execucao > GPU`.
-3. Execute a celula de diagnostico:
-   - `!nvidia-smi`
-   - `!nvcc --version`
-   - `!which nvprof || echo "nvprof nao encontrado"`
-4. Execute as celulas em ordem.
-5. Confira se `cuML` foi importado. Se `cuML` nao estiver disponivel, o notebook usa `sklearn` como baseline CPU.
-6. Compile o codigo CUDA com `nvcc -O3`.
-7. Execute o binario. Se `nvprof` existir, o notebook usa `nvprof`; caso contrario, executa diretamente.
-8. As tabelas finais sao salvas em `results/`.
-
-Os notebooks devem ser executados no Google Colab com GPU ativada para preencher os resultados finais. Este repositorio nao inventa numeros de desempenho.
-
-## Principais estrategias implementadas
-
-| Estrategia | Ideia | Risco/limitacao |
+| Modo | Uso | Tamanhos |
 | --- | --- | --- |
-| Drop de core points | Mantem apenas uma fracao deterministica dos core points para reduzir o custo de `connect_cores`. | Pode fragmentar clusters, aumentar ruido e reduzir `ARI`/`NMI`. |
-| Quantizacao `uint8` | Normaliza dados para `[0, 1]` e usa 1 byte por atributo. | Aproxima distancias e pode alterar core points. |
-| Quantizacao `uint4 packed` | Usa valores de 0 a 15 e empacota dois atributos por byte. | Maior perda de precisao; qualidade pode cair. |
-| Datasets densos/heterogeneos | Testa cenarios onde muitos pontos viram core points e onde densidades diferentes dificultam escolher `eps`. | Datasets sinteticos ajudam a isolar efeitos, mas nao substituem dados reais. |
-| Multi-EPS experimental | Calcula `eps_baixo`, `eps_base` e `eps_alto` em uma unica execucao CUDA para reaproveitar leituras/calculos. | Ainda e `O(n^2)`, nao usa indice espacial e ainda nao combina com drop de core points. |
+| `quick` | Depuracao rapida no Colab. | `N_SAMPLES = 4000` |
+| `benchmark` | Resultados finais, quando viavel. | `10000`, `25000`, `50000` |
 
-## Resultados esperados
+O tamanho `100000` fica como opcional no notebook 00. Nao e recomendado prometer esse tamanho sem testar na GPU disponivel.
 
-Espera-se que o drop de core points reduza principalmente o tempo de `connect_cores`, com perda gradual de qualidade quando o `keep_ratio` diminui. A quantizacao pode reduzir leitura de memoria, mas tambem pode alterar vizinhancas por arredondamento. A versao multi-EPS deve ser avaliada como demonstracao de reaproveitamento de distancia para varios `eps`, nao como implementacao industrial otimizada.
+## Datasets
+
+Datasets sinteticos controlados:
+
+- `dense_blobs_2d`: gargalo com muitos core points;
+- `heterogeneous_blobs_2d`: regioes com densidades diferentes;
+- `dense_blobs_noise_2d`: ruido/outliers;
+- `moons_2d`: formato nao convexo;
+- `blobs_32d`: alta dimensao para quantizacao e leitura de memoria.
+
+Datasets realistas amostrados:
+
+- `real_covtype_sample`: amostra do `fetch_covtype`;
+- `real_kddcup99_sample`: amostra do `fetch_kddcup99`, com atributos categoricos convertidos para numeros;
+- `real_higgs_sample`: opcional, via `fetch_openml`, desativado por padrao porque pode falhar por rede ou tamanho.
+
+Os arquivos `data/*.bin` e `data/*.npy` sao gerados no Colab e nao sao commitados. O repositorio inclui apenas `data/manifest_exemplo.csv`; o `data/manifest.csv` real deve ser criado executando o notebook 00.
+
+## Notebooks
+
+| Notebook | Funcao |
+| --- | --- |
+| `00_datasets_e_configuracao.ipynb` | Gera datasets, estima `eps`, salva `.bin`, `.npy`, `data/manifest.csv` e `results/resumo_datasets.csv`. |
+| `01_dbscan_nvcc_drop_core_points.ipynb` | Testa drop de core points com `keep_100`, `keep_75`, `keep_50` e `keep_25`. |
+| `02_dbscan_nvcc_quantizacao_uint8_uint4.ipynb` | Compara `cuda_cpp_float32`, `cuda_cpp_uint8` e `cuda_cpp_uint4_packed`. |
+| `03_benchmark_comparativo.ipynb` | Benchmark consolidado com protocolo comum; registra falhas sem interromper tudo. |
+| `04_dbscan_nvcc_multi_eps.ipynb` | Testa multi-EPS experimental com `eps_baixo`, `eps_base` e `eps_alto`. |
+
+## Como reproduzir
+
+1. Abra `00_datasets_e_configuracao.ipynb` no Google Colab.
+2. Ative GPU em `Ambiente de execucao > Alterar tipo de ambiente de execucao > GPU`.
+3. Rode o notebook 00 para gerar `data/manifest.csv`.
+4. Rode os notebooks 01, 02 e 04 individualmente, ou rode `03_benchmark_comparativo.ipynb` para a comparacao consolidada.
+5. Confira os CSVs gerados em `results/`.
+
+Todos os notebooks incluem diagnostico:
+
+- `!nvidia-smi`;
+- `!nvcc --version`;
+- `!which nvprof || echo "nvprof nao encontrado"`.
+
+Quando `nvprof` nao existe, o notebook executa o binario diretamente. O codigo CUDA mede tempo com `cudaEvent`.
+
+## Principais estrategias
+
+| Estrategia | Ideia | Risco |
+| --- | --- | --- |
+| Drop de core points | Reduzir a quantidade de core points usados em `connect_cores`. | Pode fragmentar clusters, aumentar ruido e reduzir `ARI`/`NMI`. |
+| `uint8` | Usar 1 byte por atributo apos normalizacao. | Pode alterar vizinhancas perto de `eps`. |
+| `uint4 packed` | Guardar dois atributos por byte. | Pode ser mais rapido, mas tende a perder mais qualidade. |
+| Datasets heterogeneos | Testar densidades diferentes e escolha de `eps`. | Um unico `eps` pode nao representar todas as regioes. |
+| Multi-EPS | Calcular tres valores de `eps` na mesma execucao CUDA. | Ainda e `O(n^2)` e nao usa indice espacial. |
+
+## Resultados
+
+Resultados finais devem vir do protocolo comum. Se ainda nao houver execucao completa no Colab, use `A preencher apos execucao`.
+
+| Estrategia | Dataset | N | Tempo baseline | Tempo CUDA | Speedup | ARI vs baseline | Observacao |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Drop de core points | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Usar CSV `resultados_drop_core_points_*`. |
+| Quantizacao `uint8` | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Comparar contra `cuda_cpp_float32`. |
+| Quantizacao `uint4 packed` | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Avaliar perda de qualidade. |
+| Multi-EPS | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Comparar contra tres baselines separados. |
+| Benchmark consolidado | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Ver `benchmark_comparativo.csv`. |
+
+Um CSV antigo de drop de core points sem metadados de dataset pode existir fora do repositorio local, mas ele nao substitui o benchmark comum porque nao registra `dataset_name`, `n_samples` e `n_features`.
 
 ## Limitacoes conhecidas
 
-- As implementacoes CUDA sao didaticas e usam comparacao par-a-par, portanto continuam com custo `O(n^2)`.
-- Nao ha indice espacial como grid, kd-tree ou ball-tree.
-- `nvprof` pode nao estar disponivel em algumas imagens recentes do Colab; por isso existe alternativa para execucao direta.
-- Os datasets reais pequenos do `sklearn` ajudam na validacao, mas nao sao bons benchmarks de ocupacao de GPU.
-- Resultados finais dependem da GPU do Colab e devem ser preenchidos apos execucao real.
-
-## Tabela-resumo dos resultados
-
-| Estrategia | Dataset | Tempo baseline | Tempo CUDA | Speedup | ARI vs baseline | Observacao |
-| ---------- | ------- | -------------: | ---------: | ------: | --------------: | ---------- |
-| Drop de core points | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Comparar 100%, 75%, 50% e 25%. |
-| Quantizacao `uint8` | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Comparar contra `cuda_cpp_float32`. |
-| Quantizacao `uint4 packed` | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Avaliar perda de qualidade. |
-| Benchmarks de datasets | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Usar datasets sinteticos e reais complementares. |
-| Multi-EPS | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | A preencher apos execucao | Comparar contra tres baselines separados. |
+- As versoes CUDA sao experimentais e `O(n^2)`.
+- Nao ha indice espacial.
+- `50000` pontos pode falhar dependendo da GPU do Colab e da dimensao.
+- Datasets reais sao amostrados para manter custo viavel.
+- Nao ha promessa de superar `cuML`; isso deve ser medido.
+- Arquivos `.bin` e `.npy` sao gerados localmente e nao ficam no GitHub.
