@@ -108,8 +108,8 @@ Um CSV antigo de drop de core points sem metadados de dataset pode existir fora 
 ## Otimizacoes adicionais incorporadas aos notebooks
 
 - Notebook 01: mantem drop por hash e adiciona representantes espaciais por `cell` para datasets 2D, com versoes `cuda_cpp_grid_reps_K1`, `cuda_cpp_grid_reps_K2` e `cuda_cpp_grid_reps_K4`.
-- Notebook 02: compara `float32`, `uint8` e `uint4 packed` com warm-up, `N_REPEATS = 3` e mediana. `cuda_cpp_uint8_dp4a` fica registrado como experimento futuro, sem inventar resultado.
-- Notebook 03: benchmark final justo com warm-up, repeats, medianas, falhas registradas e comparacao contra `cuML`/`sklearn` e `cuda_cpp_float32`.
+- Notebook 02: compara `float32`, `uint8`, `uint4 packed`, versoes CuPy residentes e validacao segura de `DP4A`, sem inventar resultado.
+- Notebook 03: benchmark final justo com warm-up, repeats, medianas, falhas registradas, versoes residentes e `pivot_filter` para alta dimensao.
 - Notebook 04: multi-EPS com warm-up, repeats e mediana dos tempos.
 
 ## Comparacao justa de tempo
@@ -134,3 +134,15 @@ Em geral, `uint8` tende a ser o melhor equilibrio entre desempenho e qualidade. 
 - Datasets reais sao amostrados para manter custo viavel.
 - Nao ha promessa de superar `cuML`; isso deve ser medido.
 - Arquivos `.bin` e `.npy` sao gerados localmente e nao ficam no GitHub.
+
+## Otimizacoes avancadas para competir com cuML
+
+As novas secoes dos notebooks tentam reduzir a diferenca contra `cuML` atacando overhead que nao aparece no `cudaEvent`, mas aparece no `time_s_wall`: abertura de subprocess, leitura/escrita de `.bin`, `cudaMalloc`, `cudaMemcpy` e preparacao repetida dos mesmos dados.
+
+- `CuPy RawModule`/`RawKernel`: permite lancar kernels CUDA diretamente do Python, sem executavel externo. As versoes `cupy_float32_resident` e `cupy_uint8_resident` mantem `X` e buffers auxiliares como `cupy.ndarray`.
+- Dados residentes na GPU: o benchmark separa `tempo_preparacao_gpu_s`, `time_s_wall_com_preparacao`, `time_s_wall_sem_preparacao` e `total_cuda_event_s`. Isso ajuda a comparar custo de usuario final e custo interno dos kernels.
+- DP4A: o notebook 02 inclui validacao numerica pequena do `__dp4a` usando `int8` centrado. Se a validacao falhar, a estrategia e marcada como `falhou`. Se passar, ela fica como `experimental_validado_sem_dbscan` ate que `count/connect/assign` DP4A completos sejam ativados.
+- `.so`/`ctypes`/`pybind11`: continuam como alternativa futura para reaproveitar CUDA C++ sem subprocess, recebendo ponteiros GPU de arrays CuPy.
+- `pivot_filter`: o notebook 03 inclui uma tentativa para alta dimensao com desigualdade triangular. A ideia e calcular distancias ate pivos e podar pares impossiveis antes da distancia completa. A tabela registra `num_pivots`, `candidate_pairs_tested`, `candidate_pairs_pruned` e `prune_ratio`.
+
+Essas otimizacoes nao garantem superar `cuML`. O `cuML` e altamente otimizado e integrado ao RAPIDS. A comparacao honesta contra ele deve priorizar `time_s_wall`; entre versoes CUDA proprias, `total_cuda_event_s` e `time_s_wall_sem_preparacao` tambem sao informativos.
