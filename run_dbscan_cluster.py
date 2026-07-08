@@ -562,7 +562,7 @@ def parse_args() -> argparse.Namespace:
         "--cuda-source-file",
         type=Path,
         default=None,
-        help="Optional .cu file. Defaults to cluster_ufv/dbscan_multi_baixo_nivel.cu when it exists.",
+        help="Optional .cu file. Defaults to dbscan_multi_baixo_nivel.cu next to this script when it exists.",
     )
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/dbscan_cluster"))
     parser.add_argument("--work-dir", type=Path, default=None)

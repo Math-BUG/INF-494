@@ -25,12 +25,13 @@
 !scripts/preparar_pacote_colab.py
 !scripts/verificar_pacote_colab.py
 
-!cluster_ufv/
-!cluster_ufv/*.py
-!cluster_ufv/*.cu
-!cluster_ufv/*.md
-!cluster_ufv/*.txt
-!cluster_ufv/*.sh
+!datasets_sinteticos.py
+!dbscan_multi_baixo_nivel.cu
+!run_dbscan_cluster.py
+!README.md
+!requirements_cluster.txt
+!requirements_cuml_cluster.txt
+!setup_venv_cluster.sh
 
 *.slm
 __pycache__/
