@@ -1,2 +1,0 @@
-dataset_name,n_samples,n_features,data_path,label_path,eps,min_samples,tipo,descricao,objetivo,observacao
-heterogeneous_blobs_2d,10000,2,data/heterogeneous_blobs_2d_10000_f32.bin,data/heterogeneous_blobs_2d_10000_y.npy,A preencher apos executar o notebook 00,8,sintetico,Blobs com densidades diferentes,Comparar estrategias em regioes com densidade heterogenea,Arquivo binario nao e commitado
