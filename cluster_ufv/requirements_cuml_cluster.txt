@@ -1,0 +1,3 @@
+--extra-index-url https://pypi.nvidia.com
+cupy-cuda12x
+cuml-cu12
